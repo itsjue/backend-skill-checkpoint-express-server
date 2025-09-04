@@ -3,6 +3,37 @@ import connectionPool from "../utils/db.mjs";
 
 const questionsRouter = Router();
 
+questionsRouter.get("/search", async (req, res) => {
+  const title = req.query.title;
+  const category = req.query.category;
+
+  try {
+    let q = `SELECT * FROM questions WHERE 1=1`;
+    const params = [];
+    let i = 1;
+
+    if (title) {
+      q += ` AND title ILIKE '%' || $${i} || '%'`;
+      params.push(title);
+      i++;
+    }
+
+    if (category) {
+      q += ` AND category ILIKE '%' || $${i} || '%'`;
+      params.push(category);
+      i++;
+    }
+
+    const result = await connectionPool.query(q, params);
+    const questions = result.rows;
+    res.status(200).json(questions);
+
+  } catch (error) {
+    console.error("Database error:", error);
+    res.status(500).send("Unable to fetch a question");
+  }
+});
+
 questionsRouter.post("/", async (req, res) => {
   try {
     const { title, description, category } = req.body;
@@ -107,27 +138,21 @@ questionsRouter.delete("/:id", async (req, res) => {
   return res.status(200).json({"message": "Question has been deleted successfully."});
 });
 
-questionsRouter.get("/search", async (req, res) => {
-  const title = req.query.title;
-  const category = req.query.category;
-  let result;
+questionsRouter.put("/:id/answers", async (req, res) => {
+  const questionId = req.params.id;
+  const updatedQuestion = {...req.body};
 
-  try {
-    result = await connectionPool.query(
-      `SELECT * FROM questions
-       WHERE 
-       ($1 IS NULL OR $1 = '' OR title ILIKE '%' || $1 || '%')
-       AND
-       ($2 IS NULL OR $2 = '' OR category ILIKE '%' || $2 || '%')`,
-
-      [title, category]
-    );
-    res.status(200).json(result.rows);
-
-  } catch (error) {
-    console.error("Database error:", error);
-    res.status(500).send("Unable to fetch a question");
-  }
+  await connectionPool.query(
+    `UPDATE answers 
+     SET title = $1,
+     content = $2
+     WHERE question_id = $3`,
+    [
+      updatedQuestion.title,
+      updatedQuestion.content,
+      questionId
+    ]
+  );
 });
 
 export default questionsRouter
